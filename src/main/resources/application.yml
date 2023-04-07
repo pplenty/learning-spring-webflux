@@ -1,2 +1,23 @@
 server:
   port: 8000
+
+spring:
+  kafka:
+    consumer:
+      auto-offset-reset: latest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      group-id: learning
+      bootstrap-servers: localhost:9092
+    producer:
+      acks: 1
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      compression-type: gzip
+      bootstrap-servers: localhost:9092
+
+
+
+kafka:
+  topic:
+    test: test
