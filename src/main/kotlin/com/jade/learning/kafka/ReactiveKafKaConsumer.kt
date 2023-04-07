@@ -8,7 +8,7 @@ import org.springframework.stereotype.Component
 import reactor.util.function.Tuple2
 
 @Component
-class ReactiveKafKaConsumer<V : Any>(kafkaConsumerTemplate: ReactiveKafkaConsumerTemplate<String, String>) {
+class ReactiveKafKaConsumer(kafkaConsumerTemplate: ReactiveKafkaConsumerTemplate<String, String>) {
 
     private val log = logger()
 
