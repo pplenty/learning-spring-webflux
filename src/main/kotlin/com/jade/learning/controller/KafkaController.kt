@@ -1,5 +1,6 @@
 package com.jade.learning.controller
 
+import com.jade.learning.kafka.Message
 import com.jade.learning.kafka.ReactiveKafKaProducer
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
@@ -13,5 +14,5 @@ class KafkaController(
 ) {
 
     @GetMapping("/{topic}/send")
-    fun produce(@PathVariable topic: String, message: String) = kafKaProducer.send(topic, message)
+    fun produce(@PathVariable topic: String, name: String, age: Int) = kafKaProducer.send(topic, Message(name = name, age = age))
 }

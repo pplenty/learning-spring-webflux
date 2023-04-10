@@ -3,16 +3,25 @@ server:
 
 spring:
   kafka:
+#    properties:
+#      spring.json.trusted.packages: com.jade.learning.*
     consumer:
       auto-offset-reset: latest
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+#      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
       group-id: learning
       bootstrap-servers: localhost:9092
+      properties:
+        spring:
+          json:
+            use.type.headers: false
+            value.default.type: com.jade.learning.kafka.Message
     producer:
       acks: 1
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+#      value-serializer: org.apache.kafka.common.serialization.StringSerializer
       compression-type: gzip
       bootstrap-servers: localhost:9092
 

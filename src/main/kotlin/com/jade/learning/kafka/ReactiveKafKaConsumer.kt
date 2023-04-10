@@ -6,9 +6,10 @@ import org.slf4j.MDC
 import org.springframework.kafka.core.reactive.ReactiveKafkaConsumerTemplate
 import org.springframework.stereotype.Component
 import reactor.util.function.Tuple2
+import reactor.util.function.Tuples
 
 @Component
-class ReactiveKafKaConsumer(kafkaConsumerTemplate: ReactiveKafkaConsumerTemplate<String, String>) {
+class ReactiveKafKaConsumer(kafkaConsumerTemplate: ReactiveKafkaConsumerTemplate<String, Message>) {
 
     private val log = logger()
 
@@ -16,16 +17,31 @@ class ReactiveKafKaConsumer(kafkaConsumerTemplate: ReactiveKafkaConsumerTemplate
         kafkaConsumerTemplate
             .receiveAutoAck()
             .doOnNext { log.info("message key={}, topic={}, value={}", it.key(), it.topic(), it.value()) }
+            .map { Tuples.of(it, parse(it.value())) }
             .onErrorContinue { error, record -> logConsumeError(error, record) }
-            .doOnNext { println("value=${it.value()}") }
+            .doOnNext { handle(it.t2) }
             .onErrorContinue { error, tuple -> logHandleError(error, tuple) }
             .subscribe()
+    }
+
+    private fun parse(message: Message): Message {
+        if (message.age == 78) {
+            throw RuntimeException()
+        }
+        return message.toPerson()
+    }
+
+    private fun handle(message: Message) {
+        if (message.age == 18) {
+            throw RuntimeException()
+        }
+        println("value=${message}")
     }
 
     private fun logConsumeError(error: Throwable, record: Any) {
         if (record is ConsumerRecord<*, *>) {
             log.error(
-                "카프카 메시지를 읽는 중에 에러가 발생했습니다. key={}, topic={}, partition={}, offset={}",
+                "메시지를 읽는 중에 에러가 발생했습니다. key={}, topic={}, partition={}, offset={}",
                 record.key(),
                 record.topic(),
                 record.partition(),
@@ -44,7 +60,7 @@ class ReactiveKafKaConsumer(kafkaConsumerTemplate: ReactiveKafkaConsumerTemplate
 
             MDC.put("kafka_message_value", message.toString())
             log.error(
-                "카프카 메시지 핸들링 중 에러가 발생했습니다. key={}, topic={}, partition={}, offset={}",
+                "핸들링 중 에러가 발생했습니다. key={}, topic={}, partition={}, offset={}",
                 record.key(),
                 record.topic(),
                 record.partition(),

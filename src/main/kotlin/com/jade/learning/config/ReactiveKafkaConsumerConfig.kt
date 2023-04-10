@@ -1,5 +1,6 @@
 package com.jade.learning.config
 
+import com.jade.learning.kafka.Message
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.kafka.KafkaProperties
 import org.springframework.context.annotation.Bean
@@ -17,9 +18,9 @@ class ReactiveKafkaConsumerConfig {
     fun kafkaConsumerTemplate(
         @Value(value = "\${kafka.topic.test}") topic: String,
         kafkaProperties: KafkaProperties,
-    ): ReactiveKafkaConsumerTemplate<String, String> {
+    ): ReactiveKafkaConsumerTemplate<String, Message> {
         return ReactiveKafkaConsumerTemplate(
-            ReceiverOptions.create<String, String>(kafkaProperties.buildConsumerProperties())
+            ReceiverOptions.create<String, Message>(kafkaProperties.buildConsumerProperties())
                 .subscription(Collections.singleton(topic))
         )
     }
@@ -27,7 +28,7 @@ class ReactiveKafkaConsumerConfig {
     @Bean
     fun kafkaProducerTemplate(
         kafkaProperties: KafkaProperties,
-    ): ReactiveKafkaProducerTemplate<String, String> {
+    ): ReactiveKafkaProducerTemplate<String, Message> {
         return ReactiveKafkaProducerTemplate(
             SenderOptions.create(kafkaProperties.buildProducerProperties())
         )

@@ -1,0 +1,18 @@
+<configuration scan="false">
+    <contextName>learning-spring-webflux</contextName>
+    <property scope="context" name="service" value="learning-spring-webflux"/>
+
+    <appender name="Console" class="ch.qos.logback.core.ConsoleAppender">
+        <springProfile name="!json-logging">
+            <encoder>
+                <Pattern>[%d{yyyy-MM-dd HH:mm:ss.SSS}] [%15.15thread] [%-5level] [%mdc] %logger{36}:%L - %msg %n
+                </Pattern>
+            </encoder>
+        </springProfile>
+    </appender>
+
+    <root level="INFO">
+        <appender-ref ref="Console"/>
+    </root>
+
+</configuration>
