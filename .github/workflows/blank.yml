@@ -3,7 +3,7 @@ name: PR D-day Labeler
 on:
   schedule:
     # 매일 새벽 3시 KST 정도 (UTC 18시)
-    - cron: '0 18 * * *'
+    - cron: '0 * * * *'
   pull_request:
     types: [opened, reopened, synchronize]
 
