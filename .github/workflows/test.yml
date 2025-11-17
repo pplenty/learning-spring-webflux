@@ -3,8 +3,7 @@ name: PR D-day Labeler
 on:
   workflow_dispatch:
   schedule:
-    # 매일 새벽 3시 KST 정도 (UTC 18시)
-    - cron: '*/5 * * * *'
+    - cron: '*/5 * * * *'   # 테스트용 (5분마다)
   pull_request:
     types: [opened, reopened, synchronize]
 
@@ -23,16 +22,15 @@ jobs:
           script: |
             const owner = context.repo.owner;
             const repo  = context.repo.repo;
-            const now   = new Date();
-            const D_PREFIX = 'D-';
-            const MAX_D = 20;
 
+            const D_PREFIX = 'D';
+            const D_REGEX = /^D([+-]\d+)$/;  // D-10, D+3 등 파싱
+
+            // PR 목록
             let prs = [];
             if (context.eventName === 'pull_request') {
-              // PR 이벤트일 때는 payload에 PR이 그대로 들어있음
               prs = [context.payload.pull_request];
             } else {
-              // schedule, workflow_dispatch 등일 때는 직접 리스트 조회
               const { data } = await github.rest.pulls.list({
                 owner,
                 repo,
@@ -43,25 +41,70 @@ jobs:
             }
 
             for (const pr of prs) {
-              const created   = new Date(pr.created_at);
-              const diffMs    = now - created;
-              const diffDays  = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-              const d         = MAX_D - diffDays;
+              const labels = pr.labels.map(l => l.name);
 
-              const currentLabels = pr.labels.map(l => l.name);
-              const nonDday = currentLabels.filter(name => !name.startsWith(D_PREFIX));
+              // 모든 D label 추출
+              const dLabels = labels.filter(l => D_REGEX.test(l));
 
-              if (d >= 0) {
-                const newLabel = `${D_PREFIX}${d}`;
-                if (!nonDday.includes(newLabel)) {
-                  nonDday.push(newLabel);
-                }
+              if (dLabels.length === 0) {
+                // D 라벨이 없으면 이 PR은 관리 대상 아님
+                continue;
               }
 
+              // 가장 큰 D값을 기준으로 사용
+              // 예: ["D-10", "D-5"] -> -5가 더 크므로 -5 기준
+              const dNumbers = dLabels.map(l => parseInt(l.match(D_REGEX)[1], 10));
+              const maxD = Math.max(...dNumbers);
+
+              console.log(`PR #${pr.number} current max D = ${maxD}`);
+
+              // 하루에 1번만 줄이기 (지금은 테스트를 위해 주석 처리)
+              /*
+              const today = new Date().toISOString().split("T")[0]; 
+              const commentKey = `D-DAY-LAST-RUN:${today}`;
+
+              // 이미 오늘 실행됨?
+              const comments = await github.rest.issues.listComments({
+                owner, repo, issue_number: pr.number
+              });
+              const alreadyRunToday = comments.data.some(c => c.body === commentKey);
+              if (alreadyRunToday) {
+                console.log(`PR #${pr.number} already updated today. Skip.`);
+                continue;
+              }
+              */
+
+              // 다음 값은 -1 감소
+              const nextD = maxD - 1;
+
+              console.log(`PR #${pr.number}: ${maxD} → ${nextD}`);
+
+              // 기존 라벨에서 모든 D라벨 제거
+              const nonDLabels = labels.filter(l => !D_REGEX.test(l));
+
+              // nextD 라벨 추가
+              const nextLabel = `D${nextD >= 0 ? "+" + nextD : nextD}`;
+              // D0일 때 D+0? → 너가 정의한 기준은 D-0 → 0을 기준으로 나눔  
+              // nextD = 0이면 → D-0으로 가야 함 (요구사항)
+              const finalLabel = (nextD === 0) ? "D-0" : nextLabel;
+
+              nonDLabels.push(finalLabel);
+
+              console.log(`PR #${pr.number} → attaching label ${finalLabel}`);
+
+              // 라벨 업데이트
               await github.rest.issues.setLabels({
                 owner,
                 repo,
                 issue_number: pr.number,
-                labels: nonDday,
+                labels: nonDLabels,
               });
+
+              // 하루에 1회만 실행한 것 표시 (현재는 주석)
+              /*
+              await github.rest.issues.createComment({
+                owner, repo, issue_number: pr.number,
+                body: commentKey
+              });
+              */
             }
