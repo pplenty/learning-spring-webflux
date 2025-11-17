@@ -3,7 +3,7 @@ name: PR D-day Labeler
 on:
   schedule:
     # 매일 새벽 3시 KST 정도 (UTC 18시)
-    - cron: '0 * * * *'
+    - cron: '*/5 * * * *'
   pull_request:
     types: [opened, reopened, synchronize]
 
@@ -28,9 +28,11 @@ jobs:
 
             let prs = [];
             if (context.eventName === 'pull_request') {
+              // PR 이벤트일 때는 payload에 PR이 그대로 들어있음
               prs = [context.payload.pull_request];
             } else {
-              const { data } = await github.pulls.list({
+              // schedule, workflow_dispatch 등일 때는 직접 리스트 조회
+              const { data } = await github.rest.pulls.list({
                 owner,
                 repo,
                 state: 'open',
@@ -45,9 +47,8 @@ jobs:
               const diffDays  = Math.floor(diffMs / (1000 * 60 * 60 * 24));
               const d         = MAX_D - diffDays;
 
-              // 기존 라벨에서 D- 계열 제거
-              const current = pr.labels.map(l => l.name);
-              const nonDday = current.filter(name => !name.startsWith(D_PREFIX));
+              const currentLabels = pr.labels.map(l => l.name);
+              const nonDday = currentLabels.filter(name => !name.startsWith(D_PREFIX));
 
               if (d >= 0) {
                 const newLabel = `${D_PREFIX}${d}`;
@@ -56,7 +57,7 @@ jobs:
                 }
               }
 
-              await github.issues.setLabels({
+              await github.rest.issues.setLabels({
                 owner,
                 repo,
                 issue_number: pr.number,
