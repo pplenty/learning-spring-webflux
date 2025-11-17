@@ -3,7 +3,7 @@ name: PR D-day Labeler
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 17 * * *'   # 테스트용 (5분마다)
+    - cron: '0 18 * * *'   # 테스트용 (5분마다)
   pull_request:
     types: [opened, reopened, synchronize]
 
