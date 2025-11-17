@@ -1,0 +1,65 @@
+name: PR D-day Labeler
+
+on:
+  schedule:
+    # 매일 새벽 3시 KST 정도 (UTC 18시)
+    - cron: '0 * * * *'
+  pull_request:
+    types: [opened, reopened, synchronize]
+
+permissions:
+  pull-requests: write
+  contents: read
+
+jobs:
+  update-dday-label:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Update D-day labels
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const owner = context.repo.owner;
+            const repo  = context.repo.repo;
+            const now   = new Date();
+            const D_PREFIX = 'D-';
+            const MAX_D = 10;
+
+            let prs = [];
+            if (context.eventName === 'pull_request') {
+              prs = [context.payload.pull_request];
+            } else {
+              const { data } = await github.pulls.list({
+                owner,
+                repo,
+                state: 'open',
+                per_page: 100,
+              });
+              prs = data;
+            }
+
+            for (const pr of prs) {
+              const created   = new Date(pr.created_at);
+              const diffMs    = now - created;
+              const diffDays  = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+              const d         = MAX_D - diffDays;
+
+              // 기존 라벨에서 D- 계열 제거
+              const current = pr.labels.map(l => l.name);
+              const nonDday = current.filter(name => !name.startsWith(D_PREFIX));
+
+              if (d >= 0) {
+                const newLabel = `${D_PREFIX}${d}`;
+                if (!nonDday.includes(newLabel)) {
+                  nonDday.push(newLabel);
+                }
+              }
+
+              await github.issues.setLabels({
+                owner,
+                repo,
+                issue_number: pr.number,
+                labels: nonDday,
+              });
+            }
