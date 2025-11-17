@@ -2,7 +2,7 @@ name: PR D-day Labeler
 
 on:
   schedule:
-    # 매일 새벽 3시(KST 맞춰서 조정 가능, 현재는 UTC 기준 18시)
+    # 매일 새벽 3시 KST 정도 (UTC 18시)
     - cron: '0 18 * * *'
   pull_request:
     types: [opened, reopened, synchronize]
@@ -24,9 +24,8 @@ jobs:
             const repo  = context.repo.repo;
             const now   = new Date();
             const D_PREFIX = 'D-';
-            const MAX_D = 10;   // PR 오픈 후 10일 동안 D-10 ~ D-0 부여
+            const MAX_D = 10;
 
-            // 1) 처리할 PR 목록 가져오기
             let prs = [];
             if (context.eventName === 'pull_request') {
               prs = [context.payload.pull_request];
@@ -41,35 +40,20 @@ jobs:
             }
 
             for (const pr of prs) {
-              const created = new Date(pr.created_at);
-              const diffMs  = now - created;
-              const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-              // 남은 D-day 계산 (예: 오픈 후 0일일 때 D-10, 1일 후 D-9 ...)
-              const d = MAX_D - diffDays;
-              if (d < 0) {
-                // D-day 기간 지났으면 D-라벨 제거만 하고 패스
-                const remaining = pr.labels
-                  .map(l => l.name)
-                  .filter(name => !name.startsWith(D_PREFIX));
-                await github.issues.setLabels({
-                  owner,
-                  repo,
-                  issue_number: pr.number,
-                  labels: remaining,
-                });
-                continue;
-              }
-
-              const newLabel = `${D_PREFIX}${d}`;
+              const created   = new Date(pr.created_at);
+              const diffMs    = now - created;
+              const diffDays  = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+              const d         = MAX_D - diffDays;
 
               // 기존 라벨에서 D- 계열 제거
               const current = pr.labels.map(l => l.name);
               const nonDday = current.filter(name => !name.startsWith(D_PREFIX));
 
-              // 새 D-라벨 추가
-              if (!nonDday.includes(newLabel)) {
-                nonDday.push(newLabel);
+              if (d >= 0) {
+                const newLabel = `${D_PREFIX}${d}`;
+                if (!nonDday.includes(newLabel)) {
+                  nonDday.push(newLabel);
+                }
               }
 
               await github.issues.setLabels({
