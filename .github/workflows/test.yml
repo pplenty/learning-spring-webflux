@@ -3,9 +3,9 @@ name: PR D-day Labeler
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 18 * * *'   # 매일 오전 3시 (KST)
+    - cron: '0 18 * * *'
   pull_request:
-    types: [opened, reopened, synchronize, edited]  # edited 추가 (제목 수정 시)
+    types: [opened, reopened, synchronize, edited]
 
 permissions:
   pull-requests: write
@@ -34,9 +34,10 @@ jobs:
               const diffTime = targetDate - today;
               const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
               
-              if (diffDays < 0) return `D${diffDays}`;
-              else if (diffDays === 0) return 'D-0';
-              else return `D+${diffDays}`;
+              // ✅ 수정: 미래(+) → D-, 과거(-) → D+
+              if (diffDays > 0) return `D-${diffDays}`;      // 11일 남음 → D-11
+              else if (diffDays === 0) return 'D-0';         // 오늘 → D-0
+              else return `D+${Math.abs(diffDays)}`;         // 11일 지남 → D+11
             }
 
             // PR 제목에서 배포 날짜 추출
@@ -90,10 +91,10 @@ jobs:
                     labels: filtered,
                   });
                 }
-                continue; // 배포일이 있으면 자동 증가 로직 스킵
+                continue;
               }
               
-              // 2. 기존 D라벨 하루씩 증가 (배포일 정보 없는 경우)
+              // 2. 기존 D라벨 하루씩 증가
               if (dLabels.length === 0) continue;
 
               const baseLabel = dLabels[0];
