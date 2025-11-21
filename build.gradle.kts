@@ -2,11 +2,10 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 import org.springframework.boot.gradle.tasks.bundling.BootBuildImage
 
 plugins {
-    id("org.springframework.boot") version "2.7.1"
-    id("io.spring.dependency-management") version "1.0.11.RELEASE"
-    kotlin("jvm") version "1.6.21"
-    kotlin("plugin.spring") version "1.6.21"
-    id("org.springframework.experimental.aot") version "0.12.1"
+    id("org.springframework.boot") version "3.5.7"
+    id("io.spring.dependency-management") version "1.1.7"
+    kotlin("jvm") version "1.9.25"
+    kotlin("plugin.spring") version "1.9.25"
 }
 
 group = "com.jade"
