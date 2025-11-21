@@ -3,9 +3,9 @@ name: PR D-day Labeler
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 18 * * *'   # 테스트용 (5분마다)
+    - cron: '0 18 * * *'   # 매일 오전 3시 (KST)
   pull_request:
-    types: [opened, reopened, synchronize]
+    types: [opened, reopened, synchronize, edited]  # edited 추가 (제목 수정 시)
 
 permissions:
   pull-requests: write
@@ -24,6 +24,33 @@ jobs:
             const repo  = context.repo.repo;
 
             const D_REGEX = /^D([+-]\d+)$/;
+            const DEPLOY_DATE_REGEX = /\[(\d{2})\/(\d{1,2})\/(\d{1,2})배포\]/;
+
+            // 날짜로부터 D라벨 생성
+            function getDayLabel(targetDate) {
+              const today = new Date();
+              today.setHours(0, 0, 0, 0);
+              
+              const diffTime = targetDate - today;
+              const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+              
+              if (diffDays < 0) return `D${diffDays}`;
+              else if (diffDays === 0) return 'D-0';
+              else return `D+${diffDays}`;
+            }
+
+            // PR 제목에서 배포 날짜 추출
+            function extractDeployDate(title) {
+              const match = title.match(DEPLOY_DATE_REGEX);
+              if (!match) return null;
+              
+              const [, year, month, day] = match;
+              const fullYear = 2000 + parseInt(year, 10);
+              const date = new Date(fullYear, parseInt(month, 10) - 1, parseInt(day, 10));
+              date.setHours(0, 0, 0, 0);
+              
+              return date;
+            }
 
             // PR 목록 가져오기
             let prs = [];
@@ -41,25 +68,45 @@ jobs:
 
             for (const pr of prs) {
               const labels = pr.labels.map(l => l.name);
-
-              // 모든 D라벨 중 첫 번째 라벨 선택
               const dLabels = labels.filter(l => D_REGEX.test(l));
+              
+              // 1. PR 제목에서 배포 날짜 자동 인식
+              const deployDate = extractDeployDate(pr.title);
+              
+              if (deployDate) {
+                const targetLabel = getDayLabel(deployDate);
+                
+                // D라벨이 없거나, 기존 라벨과 다른 경우에만 업데이트
+                if (dLabels.length === 0 || !dLabels.includes(targetLabel)) {
+                  console.log(`PR #${pr.number}: 배포일 기반 라벨 생성 → ${targetLabel}`);
+                  
+                  const filtered = labels.filter(l => !D_REGEX.test(l));
+                  filtered.push(targetLabel);
+                  
+                  await github.rest.issues.setLabels({
+                    owner,
+                    repo,
+                    issue_number: pr.number,
+                    labels: filtered,
+                  });
+                }
+                continue; // 배포일이 있으면 자동 증가 로직 스킵
+              }
+              
+              // 2. 기존 D라벨 하루씩 증가 (배포일 정보 없는 경우)
               if (dLabels.length === 0) continue;
 
-              const baseLabel = dLabels[0];            // 예: "D-21"
-              const n = parseInt(baseLabel.match(D_REGEX)[1], 10); // -21
+              const baseLabel = dLabels[0];
+              const n = parseInt(baseLabel.match(D_REGEX)[1], 10);
+              const nextN = n + 1;
 
-              const nextN = n + 1;   // “감소” = 음수에서는 +1
-
-              // 라벨 포맷화
               let nextLabel;
-              if (nextN < 0) nextLabel = `D${nextN}`;         // 예: -20 → D-20
-              else if (nextN === 0) nextLabel = `D-0`;        // 0은 D-0 유지
-              else nextLabel = `D+${nextN}`;                  // 양수는 D+1
+              if (nextN < 0) nextLabel = `D${nextN}`;
+              else if (nextN === 0) nextLabel = 'D-0';
+              else nextLabel = `D+${nextN}`;
 
               console.log(`PR #${pr.number}: ${baseLabel} → ${nextLabel}`);
 
-              // 기존 D라벨 제거 후, nextLabel 추가
               const filtered = labels.filter(l => !D_REGEX.test(l));
               filtered.push(nextLabel);
 
