@@ -10,6 +10,7 @@ on:
 permissions:
   pull-requests: write
   contents: read
+  issues: write  # 라벨 생성/수정 권한 추가
 
 jobs:
   update-dday-label:
@@ -23,9 +24,62 @@ jobs:
             const owner = context.repo.owner;
             const repo  = context.repo.repo;
 
-            const D_REGEX = /^D([+-]\d+\+?)$/;  // + 기호 포함하도록 수정
+            const D_REGEX = /^D([+-]\d+\+?)$/;
             const DEPLOY_DATE_REGEX = /\[(\d{2})\/(\d{1,2})\/(\d{1,2})배포\]/;
-            const MAX_DAYS = 14;  // 최대 표시 일수
+            const MAX_DAYS = 14;
+
+            // D-day 값에 따른 색상 반환
+            function getLabelColor(daysLeft) {
+              // 과거 (D+): 회색
+              if (daysLeft < 0) return '6c757d';
+              
+              // 미래 (D-): 빨간 계열 그라디언트
+              if (daysLeft === 0) return 'b60205';      // D-0: 진한 빨강 (긴급!)
+              if (daysLeft === 1) return 'd73a4a';      // D-1: 빨강
+              if (daysLeft === 2) return 'e36d76';      // D-2: 밝은 빨강
+              if (daysLeft === 3) return 'ff6b6b';      // D-3: 연한 빨강
+              if (daysLeft <= 5) return 'ff8c42';       // D-4~5: 주황
+              if (daysLeft <= 7) return 'fbca04';       // D-6~7: 노랑
+              if (daysLeft <= 10) return '0e8a16';      // D-8~10: 초록
+              if (daysLeft <= 14) return '1d76db';      // D-11~14: 파랑
+              return '6e7681';                          // D-14+: 회색
+            }
+
+            // 라벨 생성 또는 업데이트
+            async function ensureLabelWithColor(name, daysLeft) {
+              const color = getLabelColor(daysLeft);
+              
+              try {
+                // 기존 라벨 확인
+                await github.rest.issues.getLabel({
+                  owner,
+                  repo,
+                  name
+                });
+                
+                // 라벨이 존재하면 색상 업데이트
+                await github.rest.issues.updateLabel({
+                  owner,
+                  repo,
+                  name,
+                  color,
+                  description: `${Math.abs(daysLeft)}일 ${daysLeft >= 0 ? '남음' : '지남'}`
+                });
+                console.log(`라벨 업데이트: ${name} (색상: #${color})`);
+              } catch (error) {
+                if (error.status === 404) {
+                  // 라벨이 없으면 생성
+                  await github.rest.issues.createLabel({
+                    owner,
+                    repo,
+                    name,
+                    color,
+                    description: `${Math.abs(daysLeft)}일 ${daysLeft >= 0 ? '남음' : '지남'}`
+                  });
+                  console.log(`라벨 생성: ${name} (색상: #${color})`);
+                }
+              }
+            }
 
             // 날짜로부터 D라벨 생성
             function getDayLabel(targetDate) {
@@ -35,12 +89,11 @@ jobs:
               const diffTime = targetDate - today;
               const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
               
-              // D-14+ ~ D+14+ 범위로 제한
-              if (diffDays > MAX_DAYS) return `D-${MAX_DAYS}+`;       // 15일 이상 남음
-              else if (diffDays > 0) return `D-${diffDays}`;          // 1~14일 남음
-              else if (diffDays === 0) return 'D-0';                  // 오늘
-              else if (diffDays >= -MAX_DAYS) return `D+${Math.abs(diffDays)}`; // 1~14일 지남
-              else return `D+${MAX_DAYS}+`;                           // 15일 이상 지남
+              if (diffDays > MAX_DAYS) return { label: `D-${MAX_DAYS}+`, days: MAX_DAYS + 1 };
+              else if (diffDays > 0) return { label: `D-${diffDays}`, days: diffDays };
+              else if (diffDays === 0) return { label: 'D-0', days: 0 };
+              else if (diffDays >= -MAX_DAYS) return { label: `D+${Math.abs(diffDays)}`, days: diffDays };
+              else return { label: `D+${MAX_DAYS}+`, days: -(MAX_DAYS + 1) };
             }
 
             // PR 제목에서 배포 날짜 추출
@@ -78,10 +131,13 @@ jobs:
               const deployDate = extractDeployDate(pr.title);
               
               if (deployDate) {
-                const targetLabel = getDayLabel(deployDate);
+                const { label: targetLabel, days: daysLeft } = getDayLabel(deployDate);
+                
+                // 라벨 생성/업데이트 (색상 포함)
+                await ensureLabelWithColor(targetLabel, daysLeft);
                 
                 if (dLabels.length === 0 || !dLabels.includes(targetLabel)) {
-                  console.log(`PR #${pr.number}: 배포일 기반 라벨 생성 → ${targetLabel}`);
+                  console.log(`PR #${pr.number}: ${targetLabel} 적용`);
                   
                   const filtered = labels.filter(l => !D_REGEX.test(l));
                   filtered.push(targetLabel);
@@ -101,9 +157,8 @@ jobs:
 
               const baseLabel = dLabels[0];
               
-              // D-14+나 D+14+ 같은 경계 라벨은 그대로 유지
               if (baseLabel.endsWith('+')) {
-                console.log(`PR #${pr.number}: ${baseLabel} 유지 (경계값)`);
+                console.log(`PR #${pr.number}: ${baseLabel} 유지`);
                 continue;
               }
 
@@ -113,12 +168,26 @@ jobs:
               const n = parseInt(match[1], 10);
               const nextN = n + 1;
 
-              let nextLabel;
-              if (nextN > MAX_DAYS) nextLabel = `D-${MAX_DAYS}+`;
-              else if (nextN > 0) nextLabel = `D-${nextN}`;
-              else if (nextN === 0) nextLabel = 'D-0';
-              else if (nextN >= -MAX_DAYS) nextLabel = `D+${Math.abs(nextN)}`;
-              else nextLabel = `D+${MAX_DAYS}+`;
+              let nextLabel, nextDays;
+              if (nextN > MAX_DAYS) {
+                nextLabel = `D-${MAX_DAYS}+`;
+                nextDays = MAX_DAYS + 1;
+              } else if (nextN > 0) {
+                nextLabel = `D-${nextN}`;
+                nextDays = nextN;
+              } else if (nextN === 0) {
+                nextLabel = 'D-0';
+                nextDays = 0;
+              } else if (nextN >= -MAX_DAYS) {
+                nextLabel = `D+${Math.abs(nextN)}`;
+                nextDays = nextN;
+              } else {
+                nextLabel = `D+${MAX_DAYS}+`;
+                nextDays = -(MAX_DAYS + 1);
+              }
+
+              // 라벨 생성/업데이트 (색상 포함)
+              await ensureLabelWithColor(nextLabel, nextDays);
 
               console.log(`PR #${pr.number}: ${baseLabel} → ${nextLabel}`);
 
